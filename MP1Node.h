@@ -42,6 +42,27 @@ enum MsgTypes{
 typedef struct MembershipList {
 	int num_members;
 	Address member_list[MEMBER_LIST_SIZE];
+	int member_ts[MEMBER_LIST_SIZE];
+	int num_failed_members;
+	Address failed_list[MEMBER_LIST_SIZE];
+	int failed_ts[MEMBER_LIST_SIZE];
+
+	string ToString() {
+		ostringstream oss;
+		oss << "=======MembershipList=====\n";
+		oss << "NumMembers: " << num_members << "\n";
+		for (int xx=0; xx < num_members; xx++) {
+			oss << AddressStr(&member_list[xx]);
+			oss << " @ " << member_ts[xx] << "\n";
+		}
+		oss << "NumFailedMembers: " << num_failed_members << "\n";
+		for (int xx=0; xx < num_failed_members; xx++) {
+			oss << AddressStr(&failed_list[xx]);
+			oss << " @ " << failed_ts[xx] << "\n";
+		}
+		oss << "==================\n";
+		return oss.str;
+	}
 } MembershipList;
 
 typedef struct JoinReq {
@@ -105,6 +126,18 @@ public:
 	void nodeStart(char *servaddrstr, short serverport);
 	int initThisNode(Address *joinaddr);
 	int introduceSelfToGroup(Address *joinAddress);
+
+	// ---------
+
+	void MaybeAddToMembershipList(Address *addr, int timestamp);
+
+	// ---------
+
+	void HandleJoinReq(MessageHdr *msg);
+
+
+	// ---------
+
 	int finishUpThisNode();
 	void nodeLoop();
 	void checkMessages();
@@ -114,7 +147,13 @@ public:
 	Address getJoinAddress();
 	void initMemberListTable(Member *memberNode);
 	void printAddress(Address *addr);
+
+	// -------
 	string AddressStr(Address *addr);
+	int GetIDFromAddr(Address *addr);
+	short GetPortFromAddr(Address *addr);
+
+	// -------
 	virtual ~MP1Node();
 };
 

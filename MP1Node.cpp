@@ -130,16 +130,10 @@ int MP1Node::introduceSelfToGroup(Address *joinaddr) {
         log->LOG(&memberNode->addr, "Starting up group...");
 #endif
         memberNode->inGroup = true;
+
+        MaybeAddToMembershipList(&(memberNode->addr), par->getcurrtime());
     }
     else {
-//        size_t msgsize = sizeof(MessageHdr) + sizeof(joinaddr->addr) + sizeof(long) + 1;
-//        msg = (MessageHdr *) malloc(msgsize * sizeof(char));
-//
-//        // create JOINREQ message: format of data is {struct Address myaddr}
-//        msg->msgType = JOINREQ;
-//        memcpy((char *)(msg+1), &memberNode->addr.addr, sizeof(memberNode->addr.addr));
-//        memcpy((char *)(msg+1) + 1 + sizeof(memberNode->addr.addr), &memberNode->heartbeat, sizeof(long));
-
     	msg = (MessageHdr *) malloc(sizeof(MessageHdr));
 		msg->msgType = JOINREQ;
 		msg->data.join_req.heartbeat = memberNode->heartbeat;
@@ -228,25 +222,72 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
 	/*
 	 * Your code goes here
 	 */
-	cout << "Received message at: ";
-	printAddress(&((Member *) env)->addr);
-////	printAddress(((Member *) env)->addr);
-//
-//	char *recv_addr = (data + sizeof(MessageHdr));
-//
-//    printf("%d.%d.%d.%d:%d \n", recv_addr[0], recv_addr[1], recv_addr[2],
-//			recv_addr[3], *(short*) &recv_addr[4]);
-//
-//	cout << "Received message at: " << ((Member *) env)->addr.addr << " : "
-//			<< ((MessageHdr *) data)->msgType << " size: " << size << " : from : " << (data+sizeof(MessageHdr)) <<"\n";
+	cout << "Received message at: " << AddressStr(&((Member *)env)->addr);
 
 	MessageHdr *msg = (MessageHdr *)data;
 
-	if (msg->msgType == JOINREQ){
-		cout << " from: ";
-		printAddress(&msg->data.join_req.sender_addr);
-		cout << " hbt: " << msg->data.join_req.heartbeat << "\n";
-	}
+    switch(msg->msgType) {
+        case JOINREQ:{
+            HandleJoinReq(msg);
+        } break;
+
+        default: {
+          cout << "Unhandled msg_type: " << msg->msgType << " Size: " << size;
+        } break;
+    }
+
+	// if (msg->msgType == JOINREQ){
+	// 	cout << " from: ";
+	// 	printAddress(&msg->data.join_req.sender_addr);
+	// 	cout << " hbt: " << msg->data.join_req.heartbeat << "\n";
+	// }
+}
+
+void MP1Node::HandleJoinReq(MessageHdr * in_msg) {
+  cout << "HandleJoinReq From: "
+       << AddressStr(&(in_msg->data.join_req.sender_addr));
+
+  // Send JOINREP with membership list.
+  MessageHdr* msg;
+
+  msg = (MessageHdr*)malloc(sizeof(MessageHdr));
+  msg->msgType = JOINREP;
+  memcpy(&msg->data.join_rep.sender_addr,
+         &memberNode->addr.addr,
+         sizeof(memberNode->addr.addr));
+
+  cout << "Sending JOINREP to : "
+       << AddressStr(&(in_msg->data.join_req.sender_addr))
+       << " from: " << AddressStr(&memberNode->addr) << endl;
+
+  // send JOINREQ message to introducer member
+  emulNet->ENsend(&memberNode->addr,
+                  &(in_msg->data.join_req.sender_addr),
+                  (char*)msg,
+                  sizeof(MessageHdr));
+
+  free(msg);
+}
+
+
+void MP1Node::MaybeAddToMembershipList(Address *addr, int timestamp) {
+    cout << "MaybeAddToMembershipList\n";
+    int id = GetIDFromAddr(addr);
+    short port = GetPortFromAddr(addr);
+    for (auto &mle : memberNode->memberList) {
+        if(mle.id == id && mle.port == port) {
+            if (timestamp > mle.timestamp) {
+                mle.timestamp = timestamp;
+            }
+            return;
+        }
+    }
+
+    cout << "Adding: Addr: " << AddressStr(addr) << " TS: " << timestamp
+         << " in the membership list at : " << AddressStr(&memberNode->addr) << "\n";
+
+    memberNode->memberList.emplace_back(
+        MemberListEntry(id, port, 0 /* heartbeat */, timestamp));
 }
 
 /**
@@ -306,7 +347,7 @@ void MP1Node::initMemberListTable(Member *memberNode) {
 void MP1Node::printAddress(Address *addr)
 {
     printf("%d.%d.%d.%d:%d",  addr->addr[0],addr->addr[1],addr->addr[2],
-                                                       addr->addr[3], *(short*)&addr->addr[4]) ;    
+                                                       addr->addr[3], *(short*)&addr->addr[4]);    
 }
 
 string MP1Node::AddressStr(Address *addr) {
@@ -315,4 +356,16 @@ string MP1Node::AddressStr(Address *addr) {
 			<< (int) addr->addr[2] << "." << (int) addr->addr[3] << ":"
 			<< *(short*) &addr->addr[4];
 	return s.str();
+}
+
+int MP1Node::GetIDFromAddr(Address* addr) {
+  int id = 0;
+  memcpy(&id, &addr->addr[0], sizeof(int));
+  return id;
+}
+
+short MP1Node::GetPortFromAddr(Address* addr) {
+  short port = 0;
+  memcpy(&port, &addr->addr[4], sizeof(short));
+  return port;
 }
