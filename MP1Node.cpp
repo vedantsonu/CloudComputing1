@@ -6,6 +6,7 @@
  **********************************/
 
 #include "MP1Node.h"
+#include <sstream>
 
 /*
  * Note: You can change/add any functions in MP1Node.{h,cpp}
@@ -131,13 +132,22 @@ int MP1Node::introduceSelfToGroup(Address *joinaddr) {
         memberNode->inGroup = true;
     }
     else {
-        size_t msgsize = sizeof(MessageHdr) + sizeof(joinaddr->addr) + sizeof(long) + 1;
-        msg = (MessageHdr *) malloc(msgsize * sizeof(char));
+//        size_t msgsize = sizeof(MessageHdr) + sizeof(joinaddr->addr) + sizeof(long) + 1;
+//        msg = (MessageHdr *) malloc(msgsize * sizeof(char));
+//
+//        // create JOINREQ message: format of data is {struct Address myaddr}
+//        msg->msgType = JOINREQ;
+//        memcpy((char *)(msg+1), &memberNode->addr.addr, sizeof(memberNode->addr.addr));
+//        memcpy((char *)(msg+1) + 1 + sizeof(memberNode->addr.addr), &memberNode->heartbeat, sizeof(long));
 
-        // create JOINREQ message: format of data is {struct Address myaddr}
-        msg->msgType = JOINREQ;
-        memcpy((char *)(msg+1), &memberNode->addr.addr, sizeof(memberNode->addr.addr));
-        memcpy((char *)(msg+1) + 1 + sizeof(memberNode->addr.addr), &memberNode->heartbeat, sizeof(long));
+    	msg = (MessageHdr *) malloc(sizeof(MessageHdr));
+		msg->msgType = JOINREQ;
+		msg->data.join_req.heartbeat = memberNode->heartbeat;
+		memcpy(&msg->data.join_req.sender_addr, &memberNode->addr.addr,
+				sizeof(memberNode->addr.addr));
+
+		cout << "Sending JOINREQ to : " << AddressStr(joinaddr) << " from: "
+				<< AddressStr(&memberNode->addr) << endl;
 
 #ifdef DEBUGLOG
         sprintf(s, "Trying to join...");
@@ -145,7 +155,7 @@ int MP1Node::introduceSelfToGroup(Address *joinaddr) {
 #endif
 
         // send JOINREQ message to introducer member
-        emulNet->ENsend(&memberNode->addr, joinaddr, (char *)msg, msgsize);
+        emulNet->ENsend(&memberNode->addr, joinaddr, (char *)msg, sizeof(MessageHdr));
 
         free(msg);
     }
@@ -218,6 +228,25 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
 	/*
 	 * Your code goes here
 	 */
+	cout << "Received message at: ";
+	printAddress(&((Member *) env)->addr);
+////	printAddress(((Member *) env)->addr);
+//
+//	char *recv_addr = (data + sizeof(MessageHdr));
+//
+//    printf("%d.%d.%d.%d:%d \n", recv_addr[0], recv_addr[1], recv_addr[2],
+//			recv_addr[3], *(short*) &recv_addr[4]);
+//
+//	cout << "Received message at: " << ((Member *) env)->addr.addr << " : "
+//			<< ((MessageHdr *) data)->msgType << " size: " << size << " : from : " << (data+sizeof(MessageHdr)) <<"\n";
+
+	MessageHdr *msg = (MessageHdr *)data;
+
+	if (msg->msgType == JOINREQ){
+		cout << " from: ";
+		printAddress(&msg->data.join_req.sender_addr);
+		cout << " hbt: " << msg->data.join_req.heartbeat << "\n";
+	}
 }
 
 /**
@@ -276,6 +305,14 @@ void MP1Node::initMemberListTable(Member *memberNode) {
  */
 void MP1Node::printAddress(Address *addr)
 {
-    printf("%d.%d.%d.%d:%d \n",  addr->addr[0],addr->addr[1],addr->addr[2],
+    printf("%d.%d.%d.%d:%d",  addr->addr[0],addr->addr[1],addr->addr[2],
                                                        addr->addr[3], *(short*)&addr->addr[4]) ;    
+}
+
+string MP1Node::AddressStr(Address *addr) {
+	ostringstream s;
+	s << (int) addr->addr[0] << "." << (int) addr->addr[1] << "."
+			<< (int) addr->addr[2] << "." << (int) addr->addr[3] << ":"
+			<< *(short*) &addr->addr[4];
+	return s.str();
 }

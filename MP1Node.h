@@ -20,6 +20,7 @@
  */
 #define TREMOVE 20
 #define TFAIL 5
+#define MEMBER_LIST_SIZE 10
 
 /*
  * Note: You can change/add any functions in MP1Node.{h,cpp}
@@ -31,8 +32,40 @@
 enum MsgTypes{
     JOINREQ,
     JOINREP,
+    PING,
+    ACK,
+    PING_FWD,
+    ACK_FWD,
     DUMMYLASTMSGTYPE
 };
+
+typedef struct MembershipList {
+	int num_members;
+	Address member_list[MEMBER_LIST_SIZE];
+} MembershipList;
+
+typedef struct JoinReq {
+	Address sender_addr;
+	long heartbeat;
+} JoinReq;
+
+
+typedef struct JoinRep {
+	Address sender_addr;
+	MembershipList list;
+} JoinRep;
+
+typedef struct Ping {
+	Address sender_addr;
+	MembershipList list;
+} Ping;
+
+typedef struct PingFwd {
+	Address sender_addr;
+	Address mediator_addr;
+	Address dest_addr;
+	MembershipList list;
+} PingFwd;
 
 /**
  * STRUCT NAME: MessageHdr
@@ -41,6 +74,12 @@ enum MsgTypes{
  */
 typedef struct MessageHdr {
 	enum MsgTypes msgType;
+	union {
+		JoinReq join_req;
+		JoinRep join_rep;
+		Ping ping;
+		PingFwd ping_fwd;
+	} data;
 }MessageHdr;
 
 /**
@@ -75,6 +114,7 @@ public:
 	Address getJoinAddress();
 	void initMemberListTable(Member *memberNode);
 	void printAddress(Address *addr);
+	string AddressStr(Address *addr);
 	virtual ~MP1Node();
 };
 
